@@ -34,8 +34,16 @@ import base64
 
 app = Flask(__name__)
 
+# ── Recipients ────────────────────────────────────────────────────────────────
+# Add or remove emails here anytime. Save the file and Railway updates automatically.
+REPORT_RECIPIENTS = [
+    "Mark@Halsteadholdings.com",
+    "Mike@Halsteadholdings.com",
+    "Roxanne@Halsteadholdings.com",
+]
+
 # ── Branding ──────────────────────────────────────────────────────────────────
-COMPANY_NAME  = "Your Company Name"
+COMPANY_NAME  = "Halstead Holdings"
 COMPANY_LOGO  = "logo.png"          # path to your logo file, or a URL
 BRAND_COLOR   = colors.HexColor("#1A3C5E")   # deep navy — change to your brand
 ACCENT_COLOR  = colors.HexColor("#E8F0F8")   # light tint for table headers
@@ -294,10 +302,10 @@ def build_pdf(data: dict) -> bytes:
     return buffer.read()
 
 
-def send_email_with_pdf(to_email: str, client_name: str, property_address: str, pdf_bytes: bytes):
-    """Send the PDF as an email attachment via SendGrid."""
+def send_email_with_pdf(property_address: str, pdf_bytes: bytes):
+    """Send the PDF to all recipients in REPORT_RECIPIENTS via SendGrid."""
     api_key = os.environ.get("SENDGRID_API_KEY")
-    from_email = os.environ.get("FROM_EMAIL", "reports@yourcompany.com")
+    from_email = os.environ.get("FROM_EMAIL", "reports@halsteadholdings.com")
 
     if not api_key:
         print("SENDGRID_API_KEY not set — skipping email send")
@@ -308,13 +316,12 @@ def send_email_with_pdf(to_email: str, client_name: str, property_address: str, 
 
     message = Mail(
         from_email=from_email,
-        to_emails=to_email,
+        to_emails=REPORT_RECIPIENTS,
         subject=f"Property Inspection Report — {property_address}",
         html_content=f"""
-        <p>Dear {client_name},</p>
-        <p>Please find attached your property inspection report for <strong>{property_address}</strong>.</p>
-        <p>If you have any questions about the findings, please don't hesitate to reach out.</p>
-        <p>Best regards,<br>{COMPANY_NAME}</p>
+        <p>A new inspection report is ready for <strong>{property_address}</strong>.</p>
+        <p>Please find the full report attached.</p>
+        <p>{COMPANY_NAME}</p>
         """
     )
 
@@ -372,12 +379,9 @@ def generate_pdf_endpoint():
     except Exception as e:
         return jsonify({"error": f"PDF generation failed: {e}"}), 500
 
-    client_email    = data.get("client_email")
-    client_name     = data.get("client_name", "Client")
     property_address = data.get("property_address", "Property")
 
-    if client_email:
-        send_email_with_pdf(client_email, client_name, property_address, pdf_bytes)
+    send_email_with_pdf(property_address, pdf_bytes)
 
     # Return the PDF as base64 so Make.com can also upload it back to Airtable
     pdf_b64 = base64.b64encode(pdf_bytes).decode()
