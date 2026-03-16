@@ -126,18 +126,16 @@ def build_pdf(data: dict) -> bytes:
     # ── HEADER BANNER ─────────────────────────────────────────────────────
     logo_cell = Paragraph("", N)
     if os.path.exists(COMPANY_LOGO):
-        logo_img = Image(COMPANY_LOGO, width=1.6 * inch, height=0.8 * inch)
+        logo_img = Image(COMPANY_LOGO, width=2.2 * inch, height=0.62 * inch)
         logo_img.hAlign = "LEFT"
         logo_cell = logo_img
 
     title_cell = [
         Paragraph("Property Inspection Report",
             make_style("T1", N, fontSize=22, textColor=colors.white, fontName="Helvetica-Bold", leading=26)),
-        Paragraph(COMPANY_NAME,
-            make_style("T2", N, fontSize=11, textColor=ORANGE_LIGHT, fontName="Helvetica", leading=16)),
     ]
 
-    banner = Table([[logo_cell, title_cell]], colWidths=[1.5*inch, 5.65*inch])
+    banner = Table([[logo_cell, title_cell]], colWidths=[2.4*inch, 4.75*inch])
     banner.setStyle(TableStyle([
         ("BACKGROUND",    (0,0),(-1,-1), BLACK),
         ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
@@ -274,7 +272,7 @@ def build_pdf(data: dict) -> bytes:
         sum_ts.append(("BACKGROUND", (0,i),(-1,i), STATUS_COLORS.get(s, LIGHT_GRAY)))
     sum_table.setStyle(TableStyle(sum_ts))
     story.append(sum_table)
-    story.append(PageBreak())
+    story.append(Spacer(1, 16))
 
     # ── DETAILED FINDINGS ─────────────────────────────────────────────────
     story.append(Paragraph("Inspection Findings",
@@ -378,7 +376,7 @@ def build_pdf(data: dict) -> bytes:
                     ]))
 
                     caption = Paragraph(
-                        f"{component} — {len(photo_images)} photo(s)",
+                        f"{component} — {len(photo_images)} {'photo' if len(photo_images) == 1 else 'photos'}",
                         make_style("PC", N, fontSize=8, textColor=MID_GRAY, fontName="Helvetica-Oblique"))
 
                     photo_cell_content = [photo_grid, Spacer(1, 2), caption]
