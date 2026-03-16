@@ -126,23 +126,23 @@ def build_pdf(data: dict) -> bytes:
     # ── HEADER BANNER ─────────────────────────────────────────────────────
     logo_cell = Paragraph("", N)
     if os.path.exists(COMPANY_LOGO):
-        logo_img = Image(COMPANY_LOGO, width=2.2 * inch, height=0.62 * inch)
+        logo_img = Image(COMPANY_LOGO, width=2.8 * inch, height=0.78 * inch)
         logo_img.hAlign = "LEFT"
         logo_cell = logo_img
 
     title_cell = [
         Paragraph("Property Inspection Report",
-            make_style("T1", N, fontSize=22, textColor=colors.white, fontName="Helvetica-Bold", leading=26)),
+            make_style("T1", N, fontSize=19, textColor=colors.white, fontName="Helvetica-Bold", leading=24)),
     ]
 
-    banner = Table([[logo_cell, title_cell]], colWidths=[2.4*inch, 4.75*inch])
+    banner = Table([[logo_cell, title_cell]], colWidths=[3.1*inch, 4.05*inch])
     banner.setStyle(TableStyle([
         ("BACKGROUND",    (0,0),(-1,-1), BLACK),
         ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
         ("LEFTPADDING",   (0,0),(0,0),   14),
         ("LEFTPADDING",   (1,0),(1,0),   18),
-        ("TOPPADDING",    (0,0),(-1,-1), 16),
-        ("BOTTOMPADDING", (0,0),(-1,-1), 16),
+        ("TOPPADDING",    (0,0),(-1,-1), 18),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 18),
     ]))
     story.append(banner)
     story.append(HRFlowable(width="100%", thickness=3, color=ORANGE, spaceAfter=10, spaceBefore=0))
