@@ -308,13 +308,14 @@ def build_pdf(data: dict) -> bytes:
         ]
         table_data = [col_header]
         row_bgs = []
-        photos_block = []
+        # Track which rows are photo rows (spanning all 3 columns)
+        photo_row_indices = []
 
         for condition in area_conditions:
             component = condition.get("Component") or condition.get("component") or "—"
             status    = condition.get("Status") or condition.get("status") or ""
             notes_c   = condition.get("Notes") or condition.get("notes") or ""
-            photo_url = condition.get("Photo") or condition.get("photo") or ""
+            raw_photos = condition.get("Photo") or condition.get("photo") or condition.get("Photos") or condition.get("photos") or []
 
             # Skip blank and N/A rows
             if not status or status == "N/A":
@@ -329,26 +330,71 @@ def build_pdf(data: dict) -> bytes:
             ])
             row_bgs.append(bg)
 
-            if photo_url and isinstance(photo_url, str) and photo_url.startswith("http"):
-                tmp_path = download_image(photo_url)
-                if tmp_path:
-                    try:
-                        img = Image(tmp_path, width=3.5*inch, height=2.5*inch)
-                        img.hAlign = "LEFT"
-                        photos_block += [
-                            Spacer(1, 4),
-                            img,
-                            Paragraph(f"Photo: {area_name} — {component}", 
-                                make_style("PC", N, fontSize=8, textColor=MID_GRAY, fontName="Helvetica-Oblique", spaceAfter=6))
-                        ]
-                    except Exception as e:
-                        print(f"Could not embed image: {e}")
+            # ── Parse photo URLs from Airtable attachment field ──
+            photo_urls = []
+            if isinstance(raw_photos, list):
+                # Airtable native attachment: [{"url": "...", ...}, ...]
+                for item in raw_photos:
+                    if isinstance(item, dict):
+                        url = item.get("url") or item.get("URL") or ""
+                        if url and url.startswith("http"):
+                            photo_urls.append(url)
+                    elif isinstance(item, str) and item.startswith("http"):
+                        photo_urls.append(item)
+            elif isinstance(raw_photos, str) and raw_photos.startswith("http"):
+                # Single URL string fallback
+                photo_urls.append(raw_photos)
+
+            # ── Download and embed photos inline below this row ──
+            if photo_urls:
+                photo_images = []
+                for url in photo_urls:
+                    tmp_path = download_image(url)
+                    if tmp_path:
+                        try:
+                            img = Image(tmp_path, width=2.2*inch, height=1.65*inch)
+                            img.hAlign = "LEFT"
+                            photo_images.append(img)
+                        except Exception as e:
+                            print(f"Could not embed image: {e}")
+
+                if photo_images:
+                    # Arrange photos in rows of 3
+                    photo_grid_rows = []
+                    for i in range(0, len(photo_images), 3):
+                        row_imgs = photo_images[i:i+3]
+                        # Pad row to 3 columns
+                        while len(row_imgs) < 3:
+                            row_imgs.append(Paragraph("", N))
+                        photo_grid_rows.append(row_imgs)
+
+                    photo_grid = Table(photo_grid_rows, colWidths=[2.38*inch, 2.38*inch, 2.38*inch])
+                    photo_grid.setStyle(TableStyle([
+                        ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
+                        ("TOPPADDING",    (0,0),(-1,-1), 4),
+                        ("BOTTOMPADDING", (0,0),(-1,-1), 4),
+                        ("LEFTPADDING",   (0,0),(-1,-1), 4),
+                        ("RIGHTPADDING",  (0,0),(-1,-1), 4),
+                    ]))
+
+                    caption = Paragraph(
+                        f"{component} — {len(photo_images)} photo(s)",
+                        make_style("PC", N, fontSize=8, textColor=MID_GRAY, fontName="Helvetica-Oblique"))
+
+                    photo_cell_content = [photo_grid, Spacer(1, 2), caption]
+
+                    # Add as a spanning row in the main table
+                    table_data.append([photo_cell_content, "", ""])
+                    photo_row_indices.append(len(table_data) - 1)
+                    row_bgs.append(OFF_WHITE)
+
+        # Skip this area entirely if no valid rows were added
+        valid_data_rows = [i for i in range(1, len(table_data)) if i not in photo_row_indices]
+        if not valid_data_rows:
+            continue
 
         area_table = Table(table_data, colWidths=[2.0*inch, 1.2*inch, 3.95*inch])
 
-        # Skip this area entirely if no valid rows were added
-        if len(table_data) <= 1:
-            continue
         ts = [
             ("TOPPADDING",    (0,0),(-1,-1), 6),
             ("BOTTOMPADDING", (0,0),(-1,-1), 6),
@@ -359,9 +405,15 @@ def build_pdf(data: dict) -> bytes:
         ]
         for i, bg in enumerate(row_bgs, start=1):
             ts.append(("BACKGROUND", (0,i),(-1,i), bg))
+        # Span photo rows across all 3 columns
+        for pr in photo_row_indices:
+            ts.append(("SPAN",          (0,pr),(-1,pr)))
+            ts.append(("TOPPADDING",    (0,pr),(-1,pr), 8))
+            ts.append(("BOTTOMPADDING", (0,pr),(-1,pr), 8))
+            ts.append(("LEFTPADDING",   (0,pr),(-1,pr), 12))
         area_table.setStyle(TableStyle(ts))
 
-        block = [area_header, area_table] + photos_block + [Spacer(1, 12)]
+        block = [area_header, area_table, Spacer(1, 12)]
         story.append(KeepTogether(block))
 
     # ── FOOTER ────────────────────────────────────────────────────────────
