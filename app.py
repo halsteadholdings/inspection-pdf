@@ -352,23 +352,23 @@ def build_pdf(data: dict) -> bytes:
                     tmp_path = download_image(url)
                     if tmp_path:
                         try:
-                            img = Image(tmp_path, width=2.2*inch, height=1.65*inch)
+                            img = Image(tmp_path, width=3.3*inch, height=2.5*inch)
                             img.hAlign = "LEFT"
                             photo_images.append(img)
                         except Exception as e:
                             print(f"Could not embed image: {e}")
 
                 if photo_images:
-                    # Arrange photos in rows of 3
+                    # Arrange photos in rows of 2
                     photo_grid_rows = []
-                    for i in range(0, len(photo_images), 3):
-                        row_imgs = photo_images[i:i+3]
-                        # Pad row to 3 columns
-                        while len(row_imgs) < 3:
+                    for i in range(0, len(photo_images), 2):
+                        row_imgs = photo_images[i:i+2]
+                        # Pad row to 2 columns
+                        while len(row_imgs) < 2:
                             row_imgs.append(Paragraph("", N))
                         photo_grid_rows.append(row_imgs)
 
-                    photo_grid = Table(photo_grid_rows, colWidths=[2.38*inch, 2.38*inch, 2.38*inch])
+                    photo_grid = Table(photo_grid_rows, colWidths=[3.57*inch, 3.57*inch])
                     photo_grid.setStyle(TableStyle([
                         ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
                         ("TOPPADDING",    (0,0),(-1,-1), 4),
