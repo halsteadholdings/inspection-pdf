@@ -106,7 +106,14 @@ def build_pdf(data: dict) -> bytes:
     N = styles["Normal"]
 
     raw_date = data.get("inspection_date", "—")
-    short_date = raw_date[:10] if raw_date and len(raw_date) > 10 else raw_date
+    if raw_date and len(raw_date) >= 10:
+        try:
+            parts = raw_date[:10].split("-")
+            short_date = f"{parts[1]}-{parts[2]}-{parts[0]}"
+        except:
+            short_date = raw_date[:10]
+    else:
+        short_date = raw_date
     property_name = data.get("property", "—")
     unit = data.get("unit", "—")
     inspection_type = data.get("inspection_type", "—")
@@ -119,7 +126,7 @@ def build_pdf(data: dict) -> bytes:
     # ── HEADER BANNER ─────────────────────────────────────────────────────
     logo_cell = Paragraph("", N)
     if os.path.exists(COMPANY_LOGO):
-        logo_img = Image(COMPANY_LOGO, width=1.3 * inch, height=0.65 * inch)
+        logo_img = Image(COMPANY_LOGO, width=1.6 * inch, height=0.8 * inch)
         logo_img.hAlign = "LEFT"
         logo_cell = logo_img
 
@@ -309,10 +316,11 @@ def build_pdf(data: dict) -> bytes:
             notes_c   = condition.get("Notes") or condition.get("notes") or ""
             photo_url = condition.get("Photo") or condition.get("photo") or ""
 
-            if status == "N/A" or status == "":
-                bg = LIGHT_GRAY
-            else:
-                bg = STATUS_COLORS.get(status, LIGHT_GRAY)
+            # Skip blank and N/A rows
+            if not status or status == "N/A":
+                continue
+
+            bg = STATUS_COLORS.get(status, LIGHT_GRAY)
 
             table_data.append([
                 Paragraph(component, make_style("CR", N, fontSize=10, textColor=BLACK, fontName="Helvetica")),
@@ -337,6 +345,10 @@ def build_pdf(data: dict) -> bytes:
                         print(f"Could not embed image: {e}")
 
         area_table = Table(table_data, colWidths=[2.0*inch, 1.2*inch, 3.95*inch])
+
+        # Skip this area entirely if no valid rows were added
+        if len(table_data) <= 1:
+            continue
         ts = [
             ("TOPPADDING",    (0,0),(-1,-1), 6),
             ("BOTTOMPADDING", (0,0),(-1,-1), 6),
