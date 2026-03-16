@@ -124,11 +124,14 @@ def build_pdf(data: dict) -> bytes:
     story.append(HRFlowable(width="100%", thickness=2, color=BRAND_COLOR, spaceAfter=12))
 
     # Property info
+    raw_date = data.get("inspection_date", "—")
+    short_date = raw_date[:10] if raw_date and len(raw_date) > 10 else raw_date
+
     info_rows = [
         ["Property",        data.get("property", "—")],
         ["Unit",            data.get("unit", "—")],
         ["Inspection Type", data.get("inspection_type", "—")],
-        ["Inspection Date", data.get("inspection_date", "—")],
+        ["Inspection Date", short_date],
         ["Inspector",       data.get("inspector", "—")],
         ["Notes",           data.get("notes", "—")],
     ]
@@ -148,7 +151,7 @@ def build_pdf(data: dict) -> bytes:
     # Summary table
     conditions = data.get("conditions", [])
     if isinstance(conditions, dict):
-        conditions = [conditions]
+        conditions = conditions.get("array", [conditions])
 
     counts = {s: 0 for s in SEVERITY_ORDER}
     for c in conditions:
@@ -250,7 +253,7 @@ def build_pdf(data: dict) -> bytes:
     return buffer.read()
 
 
-def send_email_with_pdf(property_address: str, pdf_bytes: bytes):
+def send_email_with_pdf(property_address: str, unit: str, inspection_type: str, date: str, pdf_bytes: bytes):
     api_key = os.environ.get("RESEND_API_KEY")
     from_email = os.environ.get("FROM_EMAIL", "reports@halsteadholdings.com")
 
@@ -259,7 +262,7 @@ def send_email_with_pdf(property_address: str, pdf_bytes: bytes):
         return
 
     resend.api_key = api_key
-    filename = f"Inspection_{property_address.replace(' ', '_')}.pdf"
+    filename = f"Inspection_{property_address}_{unit}_{inspection_type}_{date}.pdf".replace(" ", "_")
     encoded = base64.b64encode(pdf_bytes).decode()
 
     try:
@@ -290,12 +293,19 @@ def generate_pdf_endpoint():
         return jsonify({"error": f"PDF generation failed: {e}"}), 500
 
     property_address = data.get("property", "Property")
-    send_email_with_pdf(property_address, pdf_bytes)
+    unit = data.get("unit", "")
+    inspection_type = data.get("inspection_type", "")
+    raw_date = data.get("inspection_date", "")
+    # Format date from 2026-03-15T20:10:42.269Z to 2026-03-15
+    short_date = raw_date[:10] if raw_date else ""
+
+    send_email_with_pdf(property_address, unit, inspection_type, short_date, pdf_bytes)
 
     pdf_b64 = base64.b64encode(pdf_bytes).decode()
+    filename = f"Inspection_{property_address}_{unit}_{inspection_type}_{short_date}.pdf".replace(" ", "_")
     return jsonify({
         "status": "ok",
-        "filename": f"Inspection_{property_address.replace(' ', '_')}.pdf",
+        "filename": filename,
         "pdf_base64": pdf_b64,
     })
 
