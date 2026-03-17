@@ -484,7 +484,14 @@ def generate_pdf_endpoint():
     unit = data.get("unit", "")
     inspection_type = data.get("inspection_type", "")
     raw_date = data.get("inspection_date", "")
-    short_date = raw_date[:10] if raw_date else ""
+    if raw_date and len(raw_date) >= 10:
+        try:
+            parts = raw_date[:10].split("-")
+            short_date = f"{parts[1]}-{parts[2]}-{parts[0]}"
+        except:
+            short_date = raw_date[:10]
+    else:
+        short_date = raw_date
 
     send_email_with_pdf(property_address, unit, inspection_type, short_date, pdf_bytes)
 
