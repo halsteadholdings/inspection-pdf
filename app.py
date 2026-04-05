@@ -121,6 +121,50 @@ def build_pdf(data: dict) -> bytes:
     notes = data.get("notes", "")
     turn_level = data.get("turn_level", "") or data.get("Turn Level", "") or ""
 
+    # ── Unit-level spec fields (captured in inspection app) ──
+    unit_specs = {
+        "window_inventory": data.get("window_inventory") or data.get("Window Inventory") or "",
+        "outlet_count":     data.get("outlet_count")     or data.get("Outlet Count")     or "",
+        "switch_count":     data.get("switch_count")     or data.get("Switch Count")     or "",
+        "plate_count":      data.get("plate_count")      or data.get("Plate Count")      or "",
+        "tub_drain_sides":  data.get("tub_drain_sides")  or data.get("Tub Drain Sides")  or "",
+        "oven_fuel":        data.get("oven_fuel")        or data.get("Oven Fuel")        or "",
+        "oven_model":       data.get("oven_model")       or data.get("Oven Model")       or "",
+        "fridge_model":     data.get("fridge_model")     or data.get("Fridge Model")     or "",
+        "wh_year":          data.get("wh_year")          or data.get("Water Heater Year") or "",
+        "wh_capacity":      data.get("wh_capacity")      or data.get("Water Heater Capacity") or "",
+        "furnace_year":     data.get("furnace_year")     or data.get("Furnace Year")     or "",
+        "furnace_filter":   data.get("furnace_filter")   or data.get("Furnace Filter Size") or "",
+    }
+
+    def spec_for(area, component):
+        """Return small inline spec string for a condition row, or empty string."""
+        parts = []
+        if component == "Oven":
+            if unit_specs["oven_fuel"]: parts.append(str(unit_specs["oven_fuel"]))
+            if unit_specs["oven_model"]: parts.append(f"Model: {unit_specs['oven_model']}")
+        elif component == "Refrigerator":
+            if unit_specs["fridge_model"]: parts.append(f"Model: {unit_specs['fridge_model']}")
+        elif component == "Water Heater":
+            if unit_specs["wh_capacity"]: parts.append(f"{unit_specs['wh_capacity']} gal")
+            if unit_specs["wh_year"]: parts.append(f"Installed {unit_specs['wh_year']}")
+        elif component == "Furnace/HVAC":
+            if unit_specs["furnace_year"]: parts.append(f"Installed {unit_specs['furnace_year']}")
+            if unit_specs["furnace_filter"]: parts.append(f"Filter: {unit_specs['furnace_filter']}")
+        elif component == "Electrical Outlets":
+            counts = []
+            if unit_specs["outlet_count"]: counts.append(f"{unit_specs['outlet_count']} outlets")
+            if unit_specs["switch_count"]: counts.append(f"{unit_specs['switch_count']} switches")
+            if unit_specs["plate_count"]: counts.append(f"{unit_specs['plate_count']} plates")
+            if counts: parts.append(" / ".join(counts))
+        elif component == "Shower/Tub" and unit_specs["tub_drain_sides"]:
+            for chunk in str(unit_specs["tub_drain_sides"]).split("/"):
+                if area.strip() in chunk:
+                    side = chunk.split(":")[-1].strip()
+                    if side: parts.append(f"Drain: {side}")
+                    break
+        return " · ".join(parts)
+
     story = []
 
     # ── HEADER BANNER ─────────────────────────────────────────────────────
@@ -218,6 +262,26 @@ def build_pdf(data: dict) -> bytes:
             ("BOX",           (0,0),(-1,-1), 0.5, colors.HexColor("#BBBBBB")),
         ]))
         story.append(tl_table)
+        story.append(Spacer(1, 10))
+
+    # Window inventory box (unit-wide)
+    if unit_specs["window_inventory"]:
+        win_table = Table([
+            [
+                Paragraph("Window Inventory", make_style("WL", N, fontSize=8, textColor=ORANGE, fontName="Helvetica-Bold")),
+                Paragraph(str(unit_specs["window_inventory"]), make_style("WV", N, fontSize=10, textColor=BLACK, fontName="Helvetica", leading=14)),
+            ]
+        ], colWidths=[1.3*inch, 5.85*inch])
+        win_table.setStyle(TableStyle([
+            ("BACKGROUND",    (0,0),(-1,-1), OFF_WHITE),
+            ("VALIGN",        (0,0),(-1,-1), "TOP"),
+            ("TOPPADDING",    (0,0),(-1,-1), 10),
+            ("BOTTOMPADDING", (0,0),(-1,-1), 10),
+            ("LEFTPADDING",   (0,0),(-1,-1), 12),
+            ("LINEBEFORE",    (0,0),(0,-1),  3, ORANGE),
+            ("BOX",           (0,0),(-1,-1), 0.3, colors.HexColor("#DDDDDD")),
+        ]))
+        story.append(win_table)
         story.append(Spacer(1, 10))
 
     # Inspector notes box
@@ -321,8 +385,15 @@ def build_pdf(data: dict) -> bytes:
 
             bg = STATUS_COLORS.get(status, LIGHT_GRAY)
 
+            # Build component cell — add spec info as small italic text below name if applicable
+            spec_text = spec_for(area_name, component)
+            if spec_text:
+                component_html = f"{component}<br/><font size=8 color='#777777'><i>{spec_text}</i></font>"
+            else:
+                component_html = component
+
             table_data.append([
-                Paragraph(component, make_style("CR", N, fontSize=10, textColor=BLACK, fontName="Helvetica")),
+                Paragraph(component_html, make_style("CR", N, fontSize=10, textColor=BLACK, fontName="Helvetica", leading=13)),
                 Paragraph(status or "—", make_style("SR2", N, fontSize=9, textColor=BLACK, fontName="Helvetica-Bold")),
                 Paragraph(str(notes_c) if notes_c else "—", make_style("NR", N, fontSize=9, textColor=MID_GRAY, fontName="Helvetica")),
             ])
