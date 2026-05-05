@@ -139,8 +139,9 @@ def upload_to_dropbox(pdf_bytes: bytes, property_name: str, unit: str,
                 pass
 
         filename = f"{date_for_filename}_{type_clean}.pdf"
-        # Full Dropbox access — write directly into the team's shared corporate folder.
-        path = f"/Halstead Holdings Corporate Documents/Unit Inspections/{property_clean}/Unit {unit_clean}/{filename}"
+        # NOTE: With "App folder" permission type, this path is relative to
+        # /Apps/halstead-inspections-v3/ in your Dropbox.
+        path = f"/{property_clean}/Unit {unit_clean}/{filename}"
 
         dbx = dropbox.Dropbox(token)
         result = dbx.files_upload(
