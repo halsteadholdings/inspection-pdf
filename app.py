@@ -3,11 +3,12 @@ Property Inspection PDF Generator — Halstead Holdings
 Deploy on Railway. Make.com calls POST /generate-pdf with JSON from Airtable.
 
 Requirements:
-  pip install flask reportlab requests resend pillow
+  pip install flask reportlab requests resend pillow dropbox
 
 Environment variables:
-  RESEND_API_KEY  - your Resend API key
-  FROM_EMAIL      - verified sender email
+  RESEND_API_KEY         - your Resend API key
+  FROM_EMAIL             - verified sender email
+  DROPBOX_ACCESS_TOKEN   - Dropbox app access token (for archiving PDFs)
 """
 
 import io
@@ -15,6 +16,9 @@ import os
 import requests
 import tempfile
 import resend
+import dropbox
+from dropbox.files import WriteMode
+from dropbox.exceptions import ApiError, AuthError
 from flask import Flask, request, jsonify
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
@@ -88,6 +92,76 @@ def download_image(url: str):
 
 def make_style(name, parent, **kwargs):
     return ParagraphStyle(name, parent=parent, **kwargs)
+
+
+def sanitize_folder_name(name: str) -> str:
+    """Make a string safe to use as a Dropbox folder or file name."""
+    if not name:
+        return ""
+    name = str(name).strip()
+    # Replace path separators (Dropbox uses / as path delimiter)
+    name = name.replace("/", "-").replace("\\", "-")
+    # Strip other problematic characters
+    for ch in [":", "*", "?", '"', "<", ">", "|"]:
+        name = name.replace(ch, "")
+    # Collapse multiple spaces
+    while "  " in name:
+        name = name.replace("  ", " ")
+    return name.strip()
+
+
+def upload_to_dropbox(pdf_bytes: bytes, property_name: str, unit: str,
+                      inspection_type: str, short_date: str) -> str:
+    """
+    Upload PDF to Dropbox in a Property → Unit folder structure.
+    Returns the Dropbox path on success, or None on failure.
+    Never raises — failures are logged but don't break the pipeline.
+    """
+    token = os.environ.get("DROPBOX_ACCESS_TOKEN")
+    if not token:
+        print("DROPBOX_ACCESS_TOKEN not set — skipping Dropbox upload")
+        return None
+
+    try:
+        # Sanitize all path components
+        property_clean = sanitize_folder_name(property_name) or "Unknown Property"
+        unit_clean = sanitize_folder_name(unit) or "No Unit"
+        type_clean = sanitize_folder_name(inspection_type) or "Inspection"
+        date_clean = sanitize_folder_name(short_date) or "Unknown Date"
+
+        # Convert date from MM-DD-YYYY to YYYY-MM-DD for chronological sorting
+        date_for_filename = date_clean
+        if len(date_clean) == 10 and date_clean[2] == "-" and date_clean[5] == "-":
+            try:
+                mm, dd, yyyy = date_clean.split("-")
+                date_for_filename = f"{yyyy}-{mm}-{dd}"
+            except Exception:
+                pass
+
+        filename = f"{date_for_filename}_{type_clean}.pdf"
+        # NOTE: With "App folder" permission type, this path is relative to
+        # /Apps/halstead-inspections/ in your Dropbox.
+        path = f"/{property_clean}/Unit {unit_clean}/{filename}"
+
+        dbx = dropbox.Dropbox(token)
+        result = dbx.files_upload(
+            pdf_bytes,
+            path,
+            mode=WriteMode("add"),   # never overwrite existing files
+            autorename=True,         # auto-add (1), (2) on collision
+        )
+        print(f"Dropbox upload successful: {result.path_display}")
+        return result.path_display
+
+    except AuthError as e:
+        print(f"Dropbox auth error (token may be invalid or expired): {e}")
+        return None
+    except ApiError as e:
+        print(f"Dropbox API error: {e}")
+        return None
+    except Exception as e:
+        print(f"Dropbox upload failed: {e}")
+        return None
 
 
 def build_pdf(data: dict) -> bytes:
@@ -564,11 +638,22 @@ def generate_pdf_endpoint():
     else:
         short_date = raw_date
 
+    # Archive PDF to Dropbox (failure here does not break the pipeline)
+    dropbox_path = upload_to_dropbox(
+        pdf_bytes, property_address, unit, inspection_type, short_date
+    )
+
+    # Send PDF via email
     send_email_with_pdf(property_address, unit, inspection_type, short_date, pdf_bytes)
 
     pdf_b64 = base64.b64encode(pdf_bytes).decode()
     filename = f"Inspection_{property_address}_{unit}_{inspection_type}_{short_date}.pdf".replace(" ", "_")
-    return jsonify({"status": "ok", "filename": filename, "pdf_base64": pdf_b64})
+    return jsonify({
+        "status": "ok",
+        "filename": filename,
+        "pdf_base64": pdf_b64,
+        "dropbox_path": dropbox_path,
+    })
 
 
 @app.route("/health", methods=["GET"])
