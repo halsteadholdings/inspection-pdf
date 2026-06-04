@@ -36,8 +36,9 @@ app = Flask(__name__)
 # ── Recipients ────────────────────────────────────────────────────────────────
 REPORT_RECIPIENTS = [
     "Mark@Halsteadholdings.com",
-    "Mike@Halsteadholdings.com",
     "Roxanne@Halsteadholdings.com",
+    "David@HalsteadResidential.com",
+    "mike@halsteadresidential.com",
 ]
 
 # ── Halstead Holdings Brand Colors ───────────────────────────────────────────
